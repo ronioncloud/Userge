@@ -6,12 +6,15 @@
 #
 # All rights reserved.
 
-from requests import get
+import json
 from emoji import get_emoji_regexp
+
+import aiohttp
 
 from userge import userge, Message, Config
 
 CHANNEL = userge.getCLogger(__name__)
+LOG = userge.getLogger(__name__)
 
 
 @userge.on_cmd("cr", about={
@@ -41,10 +44,17 @@ async def cur_conv(message: Message):
         return
 
     if amount.isdigit():
-        data = get(
-            "https://free.currconv.com/api/v7/convert?"
-            f"apiKey={Config.CURRENCY_API}&q={currency_from}_{currency_to}&compact=ultra").json()
-        result = data[f'{currency_from}_{currency_to}']
+        async with aiohttp.ClientSession() as ses:
+            async with ses.get("https://free.currconv.com/api/v7/convert?"
+                               f"apiKey={Config.CURRENCY_API}&q="
+                               f"{currency_from}_{currency_to}&compact=ultra") as res:
+                data = json.loads(await res.text())
+        try:
+            result = data[f'{currency_from}_{currency_to}']
+        except KeyError:
+            LOG.info(data)
+            await message.err("invalid response from api !")
+            return
         result = float(amount) / float(result)
         result = round(result, 5)
         await message.edit(
